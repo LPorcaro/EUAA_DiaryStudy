@@ -1,0 +1,18 @@
+# Python
+__pycache__/
+*.pyc
+venv/
+.venv/
+
+# Generated pipeline outputs (regenerate by running the scripts)
+outputs/figures/events/*.png
+outputs/figures/participants/*.png
+outputs/tables/*.csv
+
+# Keep placeholder files so empty dirs survive in git
+!outputs/figures/events/.gitkeep
+!outputs/figures/participants/.gitkeep
+!outputs/tables/.gitkeep
+
+# OS
+.DS_Store

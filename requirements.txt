@@ -1,0 +1,19 @@
+# Install with:
+#   pip install -r requirements.txt
+#
+# Tested with Python 3.12. Versions below are minimums known to
+# support the APIs used in src/ (e.g. numpy's Generator API, pingouin's
+# cronbach_alpha, sklearn's silhouette_score). Newer versions within the
+# same major line should work; if you hit a compatibility issue, pin to
+# these exact versions.
+
+pandas>=2.0
+numpy>=1.24
+scipy>=1.10
+statsmodels>=0.14
+scikit-learn>=1.3
+seaborn>=0.12
+matplotlib>=3.7
+pingouin>=0.5
+networkx>=3.0
+tqdm>=4.65
