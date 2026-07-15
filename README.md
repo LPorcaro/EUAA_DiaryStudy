@@ -146,3 +146,19 @@ All figures are saved as 300 dpi PNGs, numbered in pipeline order (e.g.
   bit-identical in floating point and the difference shifts some
   permutation p-values in the fourth decimal place. A full run of both
   scripts takes roughly 30 seconds on a laptop.
+
+
+
+
+
+## Acknowledgment
+
+The study design, methodology, statistical approach, and all analytical
+decisions in this pipeline (measurement model, taxonomy, clustering
+approach, interpretation of results) were developed by the research team.
+
+Claude Sonnet 5 (Anthropic) was used to refactor the codebase: cleaning up
+structure, fixing portability issues (e.g. hardcoded font paths), adding
+consistent documentation, ensuring all figures are saved to disk, and
+optimizing performance where possible without altering any statistical
+output.
