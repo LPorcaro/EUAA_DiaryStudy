@@ -18,13 +18,13 @@ Pipeline
 7.  Co-occurrence analysis (Jaccard network + heatmap).
 8.  Construct-level aggregation of conditional probabilities.
 9.  Estimate conditional probabilities P(PB | context) with 95 % CIs.
-10. Test differences across context levels via permutation tests
-    (sign-flip Wilcoxon for 2-level; Friedman for ≥3-level).
-11. Apply Benjamini–Hochberg FDR correction.
-12. Effect size forest plot across contexts.
-13. Visualise results as annotated heatmaps.
-14. Export results to CSV.
-15. Participant-level Likert × PB correlations.
+10. Compute effect sizes across context levels (rank-biserial r for
+    2-level contexts; Kendall's W via Friedman statistic for ≥3-level),
+    reported descriptively only.
+11. Effect size forest plot across contexts.
+12. Visualise results as annotated heatmaps.
+13. Export results to CSV.
+14. Participant-level Likert × PB correlations.
 
 Constructs
 ----------
@@ -64,9 +64,7 @@ import pandas as pd
 import pingouin as pg
 import seaborn as sns
 from scipy.stats import friedmanchisquare, rankdata, spearmanr
-from statsmodels.stats.multitest import multipletests
 from statsmodels.stats.proportion import proportion_confint
-from tqdm import tqdm
 
 from config import (
     CONSTRUCT_COLORS,
@@ -631,57 +629,47 @@ def conditional_prob_ci(
 
 
 # ---------------------------------------------------------------------------
-# Permutation tests
+# Effect sizes across context levels
 # ---------------------------------------------------------------------------
 
-def permutation_test_conditional_prob(
+def compute_conditional_prob_effect_sizes(
     df_analysis: pd.DataFrame,
     pb_cols: list[str],
     context_col: str,
-    n_permutations: int = 10000,
-    apply_correction: bool = True,
-    seed: int = 42,
 ) -> pd.DataFrame:
     """
-    Permutation test for differences in P(PB | context) across context levels.
+    Effect sizes for differences in P(PB | context) across context levels.
 
     Two-level contexts (INTENT, TEMP)
-        Sign-flip permutation on participant-level differences.
         Effect size: rank-biserial r computed from the Wilcoxon W statistic
-        (zero differences excluded per standard Wilcoxon treatment).
-        Ranks are precomputed outside the loop for speed.
+        on participant-level differences (zero differences excluded per
+        standard Wilcoxon treatment).
         Sign convention follows ``CONTEXT_LEVEL_ORDER``: positive r means
         higher endorsement in the first-listed level (ACTIVE for INTENT,
         PRE for TEMP).
 
     Multi-level contexts (TRIGGERS)
-        Friedman test; effect size = Kendall's W = chi2_F / [n(k-1)].
+        Effect size = Kendall's W = chi2_F / [n(k-1)], derived from the
+        Friedman statistic.
 
-    BH-FDR correction is applied across all PB triggers within each context
-    variable; NaN p-values are excluded from correction.
+    Effect sizes are reported descriptively only, given the sample size
+    (N = 9); no significance testing or correction for multiple
+    comparisons is applied.
 
     Parameters
     ----------
     df_analysis:
         Must contain ``"PID"``, ``context_col``, and all ``pb_cols``.
     pb_cols:
-        Binary trigger columns to test.
+        Binary trigger columns.
     context_col:
         Categorical grouping variable.
-    n_permutations:
-        Number of permutation iterations.
-    apply_correction:
-        Whether to apply BH-FDR correction.
-    seed:
-        Random seed for reproducibility.
 
     Returns
     -------
     DataFrame with columns: ``PB``, ``observed_diff`` / ``observed_stat``,
-    ``effect_size``, ``p_value``, ``p_value_corrected``, ``reject_null``.
+    ``effect_size``.
     """
-    rng = np.random.default_rng(seed)
-
     if context_col in CONTEXT_LEVEL_ORDER:
         context_levels = np.array(CONTEXT_LEVEL_ORDER[context_col])
         available = df_analysis[context_col].unique()
@@ -712,14 +700,14 @@ def permutation_test_conditional_prob(
 
             if len(diffs) < 3:
                 results.append({"PB": pb, "observed_diff": np.nan,
-                                 "effect_size": np.nan, "p_value": np.nan})
+                                 "effect_size": np.nan})
                 continue
 
             diffs_nz = diffs[diffs != 0].values
             if len(diffs_nz) < 3:
                 results.append({"PB": pb,
                                  "observed_diff": round(float(diffs.mean()), 4),
-                                 "effect_size": 0.0, "p_value": 1.0})
+                                 "effect_size": 0.0})
                 continue
 
             n_nz  = len(diffs_nz)
@@ -728,23 +716,10 @@ def permutation_test_conditional_prob(
             w_obs = np.sum(ranks[diffs_nz < 0])
             r_obs = 1.0 - (2.0 * w_obs) / max_w
 
-            # Vectorised sign-flip permutation: draws the exact same random
-            # stream as the original `[rng.choice(...) for _ in range(n)]`
-            # loop (numpy's Generator.choice consumes the bit stream
-            # identically whether called once with `size=(n, k)` or n times
-            # with `size=k`), so p-values are bit-for-bit unchanged while
-            # avoiding a n_permutations-length Python loop per PB trigger.
-            signs       = rng.choice([-1, 1], size=(n_permutations, n_nz))
-            flipped     = diffs_nz[None, :] * signs
-            w_null      = np.sum(ranks[None, :] * (flipped < 0), axis=1)
-            null        = 1.0 - (2.0 * w_null) / max_w
-            p_value = float(np.mean(np.abs(null) >= np.abs(r_obs)))
-
             results.append({
                 "PB":            pb,
                 "observed_diff": round(float(diffs.mean()), 4),
                 "effect_size":   round(r_obs, 4),
-                "p_value":       p_value,
             })
 
         else:
@@ -752,80 +727,54 @@ def permutation_test_conditional_prob(
 
             if len(participant_probs) < 3:
                 results.append({"PB": pb, "observed_stat": np.nan,
-                                 "effect_size": np.nan, "p_value": np.nan})
+                                 "effect_size": np.nan})
                 continue
 
             groups = [participant_probs[lvl].values for lvl in context_levels]
 
             if all(np.array_equal(groups[0], g) for g in groups[1:]):
                 results.append({"PB": pb, "observed_stat": 0.0,
-                                 "effect_size": 0.0, "p_value": 1.0})
+                                 "effect_size": 0.0})
                 continue
 
-            stat, p_value = friedmanchisquare(*groups)
-            n, k          = len(participant_probs), len(context_levels)
-            kendall_w     = stat / (n * (k - 1))
+            stat, _   = friedmanchisquare(*groups)
+            n, k      = len(participant_probs), len(context_levels)
+            kendall_w = stat / (n * (k - 1))
 
             results.append({
                 "PB":            pb,
                 "observed_stat": round(stat, 4),
                 "effect_size":   round(kendall_w, 4),
-                "p_value":       p_value,
             })
 
-    results_df = pd.DataFrame(results)
-
-    if apply_correction:
-        valid = results_df["p_value"].notna()
-        reject, p_corr, *_ = multipletests(results_df.loc[valid, "p_value"],
-                                           method="fdr_bh")
-        results_df["p_value_corrected"] = np.nan
-        results_df["reject_null"]       = False
-        results_df.loc[valid, "p_value_corrected"] = p_corr
-        results_df.loc[valid, "reject_null"]        = reject
-
-    return results_df
+    return pd.DataFrame(results)
 
 
 # ---------------------------------------------------------------------------
 # Helper: build effect / p-value DataFrames for plotting
 # ---------------------------------------------------------------------------
 
-def build_effect_pval_dfs(
-    perm_results: pd.DataFrame,
+def build_effect_df(
+    effect_results: pd.DataFrame,
     pb_order: list[str],
-) -> tuple[pd.DataFrame, pd.DataFrame]:
+) -> pd.DataFrame:
     """
-    Extract effect sizes and FDR-corrected p-values from permutation results,
-    reindexed to ``pb_order``.
+    Extract effect sizes from the effect-size results, reindexed to
+    ``pb_order``.
 
     Parameters
     ----------
-    perm_results:
-        Output of :func:`permutation_test_conditional_prob`.
+    effect_results:
+        Output of :func:`compute_conditional_prob_effect_sizes`.
     pb_order:
         Desired row order for the heatmap.
 
     Returns
     -------
-    effect_df, pval_df: each a single-column DataFrame indexed by PB trigger.
+    Single-column DataFrame indexed by PB trigger.
     """
-    indexed   = perm_results.set_index("PB")
-    effect_df = indexed["effect_size"].reindex(pb_order).to_frame()
-    pval_df   = indexed["p_value_corrected"].reindex(pb_order).to_frame()
-    return effect_df, pval_df
-
-
-# ---------------------------------------------------------------------------
-# Significance helper
-# ---------------------------------------------------------------------------
-
-def _sig_stars(p: float) -> str:
-    """Return APA-style significance stars for a p-value."""
-    if p < 0.001: return "***"
-    if p < 0.01:  return "**"
-    if p < 0.05:  return "*"
-    return ""
+    indexed = effect_results.set_index("PB")
+    return indexed["effect_size"].reindex(pb_order).to_frame()
 
 
 # ---------------------------------------------------------------------------
@@ -848,19 +797,19 @@ def plot_effect_size_forest(
     respectively).  TRIGGERS shows Kendall's W (range 0 to 1), which is
     always positive.
 
-    Points are coloured by construct using ``CONSTRUCT_COLORS``.  Filled
-    markers indicate FDR-corrected p < 0.05; open markers indicate
-    non-significance.  Guide lines run from the reference line (0) to each
-    point for readability.  Horizontal separator lines divide construct groups.
+    Points are coloured by construct using ``CONSTRUCT_COLORS``.  Guide
+    lines run from the reference line (0) to each point for readability.
+    Horizontal separator lines divide construct groups. Effect sizes are
+    shown descriptively only; no significance testing is performed.
 
     Parameters
     ----------
     intent_results:
-        Full permutation result DataFrame for INTENT context variable.
+        Full effect-size result DataFrame for INTENT context variable.
     temp_results:
-        Full permutation result DataFrame for TEMP context variable.
+        Full effect-size result DataFrame for TEMP context variable.
     trigger_results:
-        Full permutation result DataFrame for TRIGGERS context variable.
+        Full effect-size result DataFrame for TRIGGERS context variable.
     pb_order:
         PB trigger names in display order (top to bottom).
     """
@@ -886,8 +835,6 @@ def plot_effect_size_forest(
 
             y         = y_pos[pb]
             eff       = indexed.loc[pb, "effect_size"]
-            p_corr    = indexed.loc[pb, "p_value_corrected"] \
-                        if "p_value_corrected" in indexed.columns else np.nan
             construct = get_construct(pb)
             color     = CONSTRUCT_COLORS.get(construct, "#333333")
 
@@ -895,14 +842,11 @@ def plot_effect_size_forest(
                 ax.plot(0, y, marker="x", color="lightgray", markersize=8)
                 continue
 
-            significant = (not pd.isna(p_corr)) and (float(p_corr) < 0.05)
-            face_color  = color if significant else "white"
-
             ax.plot(
                 float(eff), y,
                 marker="o", markersize=10,
                 color=color,
-                markerfacecolor=face_color,
+                markerfacecolor=color,
                 markeredgecolor=color,
                 markeredgewidth=1.8,
                 linestyle="None",
@@ -932,16 +876,6 @@ def plot_effect_size_forest(
             if 0 <= y_line < n_total:
                 ax.axhline(y_line, color="black", linewidth=1.5, zorder=2)
 
-    legend_handles = [
-        plt.Line2D([0], [0], marker="o", color="w",
-                   markerfacecolor="white", markeredgecolor="gray",
-                   markeredgewidth=1.8, markersize=9, label="p >= 0.05 (n.s.)"),
-        plt.Line2D([0], [0], marker="o", color="w",
-                   markerfacecolor="gray", markeredgecolor="gray",
-                   markeredgewidth=1.8, markersize=9, label="p < 0.05 (FDR corrected)"),
-    ]
-    fig.legend(handles=legend_handles, loc="lower center", ncol=2,
-               fontsize=9, bbox_to_anchor=(0.5, -0.04))
     plt.tight_layout()
     save_and_show(fig, EVENTS_FIGURES_DIR, "fig04_effect_size_forest.png")
 
@@ -961,9 +895,6 @@ def plot_conditional_distr_with_effects(
     effect_intent_df:  pd.DataFrame | None = None,
     effect_temp_df:    pd.DataFrame | None = None,
     effect_trigger_df: pd.DataFrame | None = None,
-    pval_intent_df:    pd.DataFrame | None = None,
-    pval_temp_df:      pd.DataFrame | None = None,
-    pval_trigger_df:   pd.DataFrame | None = None,
     annotation: str = "effect",
     pb_order: list[str] | None = None,
 ) -> None:
@@ -994,8 +925,6 @@ def plot_conditional_distr_with_effects(
     ci_intent_df, ci_temp_df, ci_trigger_df:
         Matching DataFrames of ``(lower, upper)`` confidence interval tuples.
     effect_intent_df, effect_temp_df, effect_trigger_df:
-        Accepted for API compatibility; not used in this plot.
-    pval_intent_df, pval_temp_df, pval_trigger_df:
         Accepted for API compatibility; not used in this plot.
     annotation:
         Accepted for API compatibility; not used in this plot.
@@ -1049,20 +978,20 @@ def export_conditional_results_csv(
     prob_df: pd.DataFrame,
     ci_df: pd.DataFrame,
     effect_df: pd.DataFrame,
-    pval_df: pd.DataFrame,
-    perm_results: pd.DataFrame,
+    effect_results: pd.DataFrame,
     *,
     context_name: str,
     pb_order: list[str],
     output_path: str | Path,
 ) -> pd.DataFrame:
     """
-    Write conditional probabilities, confidence intervals, effect sizes, and
-    p-values to CSV.
+    Write conditional probabilities, confidence intervals, and effect sizes
+    to CSV.
 
     Columns per context level: ``{level}_prob``, ``{level}_ci_low``,
-    ``{level}_ci_high``.  Final columns: ``effect_size``, ``p_value_raw``,
-    ``p_value_corrected``, ``significance``.
+    ``{level}_ci_high``.  Final column: ``effect_size``, reported
+    descriptively only (no significance testing or correction for
+    multiple comparisons).
 
     Parameters
     ----------
@@ -1072,10 +1001,9 @@ def export_conditional_results_csv(
         Confidence interval tuples, same shape as ``prob_df``.
     effect_df:
         Single-column effect sizes.
-    pval_df:
-        Single-column FDR-corrected p-values.
-    perm_results:
-        Full permutation results (provides raw p-values).
+    effect_results:
+        Full effect-size results (output of
+        :func:`compute_conditional_prob_effect_sizes`).
     context_name:
         Label used in print output only.
     pb_order:
@@ -1087,7 +1015,7 @@ def export_conditional_results_csv(
     -------
     The exported DataFrame (also written to ``output_path``).
     """
-    perm_idx = perm_results.set_index("PB")
+    eff_idx = effect_results.set_index("PB")
     rows: list[dict] = []
 
     for r in pb_order:
@@ -1107,28 +1035,12 @@ def export_conditional_results_csv(
             row[f"{c}_ci_low"]  = round(lo,   3)
             row[f"{c}_ci_high"] = round(hi,   3)
 
-        if r in perm_idx.index:
-            ev      = perm_idx.loc[r, "effect_size"] \
-                      if "effect_size" in perm_idx.columns else np.nan
-            pv_raw  = perm_idx.loc[r, "p_value"]
-            pv_corr = perm_idx.loc[r, "p_value_corrected"] \
-                      if "p_value_corrected" in perm_idx.columns else np.nan
-
-            if pd.isna(ev) or pd.isna(pv_raw):
-                row.update(effect_size=np.nan, p_value_raw=np.nan,
-                            p_value_corrected=np.nan, significance="n/a")
-            else:
-                ev, pv_raw = float(ev), float(pv_raw)
-                pv_corr    = float(pv_corr) if not pd.isna(pv_corr) else np.nan
-                row.update(
-                    effect_size       = round(ev, 3),
-                    p_value_raw       = round(pv_raw, 3),
-                    p_value_corrected = round(pv_corr, 3) if not pd.isna(pv_corr) else np.nan,
-                    significance      = _sig_stars(pv_corr) if not pd.isna(pv_corr) else "",
-                )
+        if r in eff_idx.index:
+            ev = eff_idx.loc[r, "effect_size"] \
+                 if "effect_size" in eff_idx.columns else np.nan
+            row["effect_size"] = round(float(ev), 3) if not pd.isna(ev) else np.nan
         else:
-            row.update(effect_size=np.nan, p_value_raw=np.nan,
-                        p_value_corrected=np.nan, significance="n/a")
+            row["effect_size"] = np.nan
 
         rows.append(row)
 
@@ -1149,22 +1061,15 @@ def compute_likert_pb_correlations(
     likerts: list[str],
     pb_cols: list[str],
     pid_col: str = "PID",
-    n_permutations: int = 10_000,
-    seed: int = 42,
-) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+) -> pd.DataFrame:
     """
     Participant-level Spearman correlations between Likert items and binary
-    PB trigger proportions, with permutation-based p-values and BH-FDR
-    correction applied within each Likert item separately.
+    PB trigger proportions.
 
     Each participant is reduced to one row by averaging Likert scores and PB
-    proportions across all their events.  Ranks are precomputed outside the
-    permutation loop (approx. 10x faster than calling ``spearmanr`` per
-    iteration).
-
-    BH-FDR is applied within each Likert item (13 tests per item) rather than
-    across all 39 pairs, since each Likert item represents an independent
-    research question.
+    proportions across all their events. Reported descriptively only, given
+    the sample size (N = 9); no significance testing or correction for
+    multiple comparisons is applied.
 
     Parameters
     ----------
@@ -1177,74 +1082,30 @@ def compute_likert_pb_correlations(
         Binary PB trigger column names.
     pid_col:
         Participant ID column (default ``"PID"``).
-    n_permutations:
-        Number of permutation iterations (default 10 000).
-    seed:
-        Random seed for reproducibility.
 
     Returns
     -------
     corr_df:
         Observed Spearman rho (rows = Likert, columns = PB triggers), 3 d.p.
-    pval_raw_df:
-        Permutation p-values (not FDR corrected), same shape.
-    pval_corr_df:
-        BH-FDR corrected permutation p-values (within-Likert), same shape.
     """
-    rng            = np.random.default_rng(seed)
     participant_df = df.groupby(pid_col)[likerts + pb_cols].mean()
 
-    corr_df     = pd.DataFrame(index=likerts, columns=pb_cols, dtype=float)
-    pval_raw_df = pd.DataFrame(index=likerts, columns=pb_cols, dtype=float)
-
+    corr_df = pd.DataFrame(index=likerts, columns=pb_cols, dtype=float)
     for q in likerts:
-        likert_ranks = rankdata(participant_df[q].values)
-
         for pb in pb_cols:
-            pb_ranks = rankdata(participant_df[pb].values)
-            rho_obs  = float(np.corrcoef(likert_ranks, pb_ranks)[0, 1])
+            rho_obs, _ = spearmanr(participant_df[q], participant_df[pb])
+            corr_df.loc[q, pb] = round(float(rho_obs), 3)
 
-            # NOTE: this loop intentionally still calls np.corrcoef once per
-            # permutation (rather than a manually-derived Pearson formula).
-            # The two are mathematically equivalent but not bit-identical in
-            # floating point; with 10,000 permutations, the tiny rounding
-            # difference occasionally flips a null draw across the
-            # significance threshold and shifts p-values in the fourth
-            # decimal place. Verified against the original script on the
-            # real dataset. Kept as-is to guarantee identical output.
-            null_rhos = np.array([
-                np.corrcoef(rng.permutation(likert_ranks), pb_ranks)[0, 1]
-                for _ in tqdm(
-                    range(n_permutations),
-                    desc=f"Permuting {q} x {pb}",
-                    leave=False,
-                )
-            ])
-
-            corr_df.loc[q, pb]     = round(rho_obs, 3)
-            pval_raw_df.loc[q, pb] = round(
-                float(np.mean(np.abs(null_rhos) >= np.abs(rho_obs))), 4
-            )
-
-    pval_corr_df = pd.DataFrame(index=likerts, columns=pb_cols, dtype=float)
-    for q in likerts:
-        _, p_corr, *_ = multipletests(
-            pval_raw_df.loc[q].astype(float).values,
-            alpha=0.05, method="fdr_bh",
-        )
-        pval_corr_df.loc[q] = p_corr.round(4)
-
-    return corr_df, pval_raw_df, pval_corr_df
+    return corr_df
 
 
 def plot_likert_pb_heatmap(
     corr_df: pd.DataFrame,
-    pval_corr_df: pd.DataFrame,
     pb_cols: list[str],
 ) -> None:
     """
     Heatmap of participant-level Spearman rho between Likert items and PB
-    triggers, annotated with FDR-corrected significance stars.
+    triggers, reported descriptively only (no significance testing).
 
     Vertical black lines separate SB / CI / LD construct groups.
 
@@ -1252,28 +1113,16 @@ def plot_likert_pb_heatmap(
     ----------
     corr_df:
         Spearman rho DataFrame (rows = Likert items, columns = PB triggers).
-    pval_corr_df:
-        BH-FDR corrected p-values (within-Likert), same shape as ``corr_df``.
     pb_cols:
         Ordered list of PB trigger names for separator line positions.
     """
-    annot = corr_df.copy().astype(str)
-    for q in corr_df.index:
-        for pb in corr_df.columns:
-            stars = _sig_stars(float(pval_corr_df.loc[q, pb]))
-            annot.loc[q, pb] = f"{corr_df.loc[q, pb]:.2f}{stars}"
-
     fig, ax = plt.subplots(figsize=(14, 4))
     sns.heatmap(
         corr_df.astype(float),
-        annot=annot, fmt="",
+        annot=True, fmt=".2f",
         cmap="coolwarm", center=0, vmin=-1, vmax=1,
         ax=ax, cbar_kws={"label": r"Spearman $\rho$"},
     )
-    # ax.set_title(
-    #     "* p < 0.05,  ** p < 0.01,  *** p < 0.001 -- FDR corrected per Likert item",
-    #     fontsize=12,
-    # )
     ax.set_xlabel("", fontsize=11)
     ax.set_ylabel("", fontsize=11)
 
@@ -1290,22 +1139,15 @@ def plot_likert_pb_heatmap(
 
 def export_likert_pb_csv(
     corr_df: pd.DataFrame,
-    pval_raw_df: pd.DataFrame,
-    pval_corr_df: pd.DataFrame,
     output_path: str | Path,
 ) -> pd.DataFrame:
     """
-    Export Spearman rho, raw and FDR-corrected permutation p-values, and
-    significance stars to a long-format CSV.
+    Export Spearman rho to a long-format CSV.
 
     Parameters
     ----------
     corr_df:
         Spearman rho (rows = Likert items, columns = PB triggers).
-    pval_raw_df:
-        Raw permutation p-values, same shape.
-    pval_corr_df:
-        BH-FDR corrected p-values (within-Likert), same shape.
     output_path:
         Destination file path (parent directories created if needed).
 
@@ -1315,13 +1157,10 @@ def export_likert_pb_csv(
     """
     records = [
         {
-            "likert":            q,
-            "PB":                pb,
-            "construct":         pb[:2] if pb != "O1" else "O",
-            "spearman_rho":      float(corr_df.loc[q, pb]),
-            "p_value_raw":       float(pval_raw_df.loc[q, pb]),
-            "p_value_corrected": round(float(pval_corr_df.loc[q, pb]), 4),
-            "significance":      _sig_stars(float(pval_corr_df.loc[q, pb])),
+            "likert":       q,
+            "PB":           pb,
+            "construct":    pb[:2] if pb != "O1" else "O",
+            "spearman_rho": float(corr_df.loc[q, pb]),
         }
         for q in corr_df.index
         for pb in corr_df.columns
@@ -1490,20 +1329,20 @@ def main(input_path: str | Path = RAW_EVENTS_PATH) -> None:
         cdf.round(3).to_csv(p)
         print(f"[export] Construct probs {label} -> {p}")
 
-    # 11. Permutation tests
-    intent_results  = permutation_test_conditional_prob(
-        df_analysis_O, pb_cols, "INTENT",   n_permutations=10_000)
-    temp_results    = permutation_test_conditional_prob(
-        df_analysis_O, pb_cols, "TEMP",     n_permutations=10_000)
-    trigger_results = permutation_test_conditional_prob(
-        df_analysis_O, pb_cols, "TRIGGERS", n_permutations=10_000)
+    # 11. Effect sizes across context levels (descriptive only)
+    intent_results  = compute_conditional_prob_effect_sizes(
+        df_analysis_O, pb_cols, "INTENT")
+    temp_results    = compute_conditional_prob_effect_sizes(
+        df_analysis_O, pb_cols, "TEMP")
+    trigger_results = compute_conditional_prob_effect_sizes(
+        df_analysis_O, pb_cols, "TRIGGERS")
 
     # 12. Assemble plotting inputs
     pb_order = pb_cols
 
-    intent_effect,  intent_pval  = build_effect_pval_dfs(intent_results,  pb_order)
-    temp_effect,    temp_pval    = build_effect_pval_dfs(temp_results,    pb_order)
-    trigger_effect, trigger_pval = build_effect_pval_dfs(trigger_results, pb_order)
+    intent_effect  = build_effect_df(intent_results,  pb_order)
+    temp_effect    = build_effect_df(temp_results,    pb_order)
+    trigger_effect = build_effect_df(trigger_results, pb_order)
 
     intent_probs  = intent_probs.reindex(pb_order)
     temp_probs    = temp_probs.reindex(pb_order)
@@ -1518,39 +1357,34 @@ def main(input_path: str | Path = RAW_EVENTS_PATH) -> None:
     # 14. Item-level conditional probability heatmaps
     plot_conditional_distr_with_effects(
         intent_probs, temp_probs, trigger_probs,
-        ci_intent_df=intent_ci,           ci_temp_df=temp_ci,           ci_trigger_df=trigger_ci,
-        effect_intent_df=intent_effect,   effect_temp_df=temp_effect,   effect_trigger_df=trigger_effect,
-        pval_intent_df=intent_pval,       pval_temp_df=temp_pval,       pval_trigger_df=trigger_pval,
+        ci_intent_df=intent_ci,         ci_temp_df=temp_ci,         ci_trigger_df=trigger_ci,
+        effect_intent_df=intent_effect, effect_temp_df=temp_effect, effect_trigger_df=trigger_effect,
         pb_order=pb_order,
     )
 
     # 15. Export conditional probability CSVs
-    for label, probs, ci, eff, pval, perm in (
-        ("INTENT",   intent_probs,  intent_ci,  intent_effect,  intent_pval,  intent_results),
-        ("TEMP",     temp_probs,    temp_ci,    temp_effect,    temp_pval,    temp_results),
-        ("TRIGGERS", trigger_probs, trigger_ci, trigger_effect, trigger_pval, trigger_results),
+    for label, probs, ci, eff, results in (
+        ("INTENT",   intent_probs,  intent_ci,  intent_effect,  intent_results),
+        ("TEMP",     temp_probs,    temp_ci,    temp_effect,    temp_results),
+        ("TRIGGERS", trigger_probs, trigger_ci, trigger_effect, trigger_results),
     ):
         export_conditional_results_csv(
-            probs, ci, eff, pval, perm,
+            probs, ci, eff, results,
             context_name=label,
             pb_order=pb_order,
             output_path=TABLES_DIR / f"conditional_probs_{label}.csv",
         )
 
     # 16. Participant-level Likert x PB correlations
-    corr_df, pval_raw_df, pval_corr_df = compute_likert_pb_correlations(
-        df_analysis_O, LIKERTS, pb_cols
-    )
+    corr_df = compute_likert_pb_correlations(df_analysis_O, LIKERTS, pb_cols)
 
     print("\n=== Participant-level Spearman rho (Likert x PB) ===")
     print(corr_df)
-    print("\n=== FDR-corrected p-values (within-Likert) ===")
-    print(pval_corr_df)
 
-    plot_likert_pb_heatmap(corr_df, pval_corr_df, pb_cols)
+    plot_likert_pb_heatmap(corr_df, pb_cols)
 
     export_likert_pb_csv(
-        corr_df, pval_raw_df, pval_corr_df,
+        corr_df,
         output_path=TABLES_DIR / "likert_pb_correlations.csv",
     )
 
