@@ -25,14 +25,11 @@ Two scripts run in sequence:
    probabilities P(PB | context) with effect sizes (rank-biserial r for
    two-level contexts, Kendall's W for TRIGGERS), and correlates PB
    triggers with the three Likert appraisal items (ALGO_CAUSE, FUTURE_USE,
-   ARTIST_HARM). All statistics are reported descriptively only, given the
-   sample size (N=9); no significance testing or correction for multiple
-   comparisons is applied. Exports an enriched event-level CSV consumed by
+   ARTIST_HARM). Exports an enriched event-level CSV consumed by
    the next script.
 2. **`src/analyze_participants.py`** — participant-level analysis. Loads
    the enriched CSV and aggregates to one row per participant (PB rates
-   and counts, context proportions, Likert means). Exploratory and
-   descriptive only, given N=9.
+   and counts, context proportions, Likert means).
 
 Both scripts print their statistical results to the console as they run
 and also write every table (and, for `analyze_events.py`, every figure) to
