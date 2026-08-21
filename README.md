@@ -154,10 +154,7 @@ All figures are saved as 300 dpi PNGs, numbered in pipeline order (e.g.
 ## Acknowledgment
 
 The study design, methodology, statistical approach, and all analytical
-decisions in this pipeline (measurement model, taxonomy, and the move to
-reporting effect sizes descriptively rather than via significance testing
-or participant clustering) were developed by the research team.
-
-Claude Sonnet 5 (Anthropic) was used to refactor the codebase: cleaning up
-structure, fixing portability issues (e.g. hardcoded font paths), adding
-consistent documentation, and ensuring all figures are saved to disk.
+decisions in this pipeline were developed by the research team. Claude 
+Sonnet 5 (Anthropic) was used to refactor the codebase: cleaning up
+structure, fixing portability issues, adding consistent documentation, 
+and ensuring all figures are saved to disk.
