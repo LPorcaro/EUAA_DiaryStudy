@@ -1,18 +1,71 @@
-# Python
-__pycache__/
-*.pyc
-venv/
-.venv/
+# Manuscript PDFs (never shared through this repository)
+/IJHCI_20261110-1.pdf
+/IJHCI_20261110-revised.pdf
+/IJHCI_revised.pdf
+/IJHCI_*.pdf
+
+# Private audit notes
+/AUDIT.md
+/CORRECTIONS.md
+
+# Reference and scratch folders
+reference/
+scratch/
+scratchpad/
 
 # Generated pipeline outputs (regenerate by running the scripts)
 outputs/figures/events/*.png
+outputs/figures/events/*.pdf
 outputs/figures/participants/*.png
+outputs/figures/participants/*.pdf
 outputs/tables/*.csv
+outputs/tables/*.txt
+# Temporary output folders
+tmp/
+temp/
 
 # Keep placeholder files so empty dirs survive in git
 !outputs/figures/events/.gitkeep
 !outputs/figures/participants/.gitkeep
 !outputs/tables/.gitkeep
 
-# OS
+# Python caches, virtual environments, test caches and build folders
+__pycache__/
+*.py[cod]
+venv/
+.venv/
+env/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.tox/
+.coverage
+htmlcov/
+build/
+dist/
+*.egg-info/
+
+# LaTeX build files
+*.aux
+*.bbl
+*.blg
+*.fdb_latexmk
+*.fls
+*.synctex.gz
+*.toc
+*.out
+*.lof
+*.lot
+
+# Editor and operating system files
 .DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.swp
+*~
+
+# Local Claude Code settings and agent working folders
+.claude/settings.local.json
+CLAUDE.local.md
+.claude/worktrees/
