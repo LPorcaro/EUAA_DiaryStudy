@@ -128,7 +128,6 @@ EUAA_DiaryStudy/
 │   ├── analyze_events.py            # step 1
 │   ├── analyze_participants.py      # step 2
 │   └── analyze_supplementary.py     # step 3
-├── tests/                           # run each file with python
 ├── requirements.txt
 ├── requirements-lock.txt
 └── LICENSE
