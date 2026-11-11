@@ -56,10 +56,8 @@ from config import (
     PID_MAP,
     TABLES_DIR,
     ensure_output_dirs,
-    setup_plot_style,
+    require_input_file,
 )
-
-setup_plot_style()
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -317,11 +315,11 @@ def main(
     """
     ensure_output_dirs()
 
-    if not Path(input_path).exists():
-        raise FileNotFoundError(
-            f"{input_path} not found. Run analyze_events.py first to "
-            f"generate the enriched events file it depends on."
-        )
+    require_input_file(
+        input_path,
+        "Run analyze_events.py first to generate the enriched events file "
+        "it depends on.",
+    )
 
     # 1. Load
     df = load_enriched(input_path)

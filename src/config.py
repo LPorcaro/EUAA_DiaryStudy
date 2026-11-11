@@ -4,23 +4,19 @@
 config.py
 =========
 Shared configuration for the analysis pipeline: file paths, the PB
-taxonomy, participant ID mapping, shared colour palettes, and matplotlib
-styling. Both ``analyze_events.py`` and ``analyze_participants.py`` import
-from this module so that constants are defined once and stay consistent
-across the two scripts.
+taxonomy, participant ID mapping and shared colour palettes. Figure
+typography lives in ``figstyle.py``. All analysis scripts import from
+this module so that constants are defined once and stay consistent.
 
 Nothing in this file changes any analysis result. It only centralises
-values that were previously duplicated (e.g. ``CONSTRUCT_COLORS`` and the
-Linux Libertine font setup appeared, verbatim, in both original scripts).
+values that were previously duplicated across the scripts.
 """
 
 from __future__ import annotations
 
-import warnings
+from datetime import datetime
 from pathlib import Path
 
-import matplotlib.font_manager as fm
-import matplotlib.pyplot as plt
 
 # ---------------------------------------------------------------------------
 # Paths
@@ -45,6 +41,30 @@ PARTICIPANTS_FIGURES_DIR = FIGURES_DIR / "participants"
 #: analyze_participants.py. Kept in outputs/tables/ rather than data/ since
 #: it is a generated artifact, not raw data.
 ENRICHED_EVENTS_PATH = TABLES_DIR / "events_enriched.csv"
+
+
+def require_input_file(path: str | Path, hint: str = "") -> Path:
+    """
+    Stop with a clear message, without a traceback, if an input file is missing.
+
+    Parameters
+    ----------
+    path:
+        File the script needs.
+    hint:
+        Extra sentence telling the user how to provide the file.
+    """
+    path = Path(path)
+    if not path.is_file():
+        raise SystemExit(f"Input file not found at {path}. {hint}".strip())
+    return path
+
+
+#: Message shown when the diary data file is missing.
+DATA_FILE_HINT = (
+    "The diary data file is expected at data/events_20260324.csv in the "
+    "repository root (see README, section Data)."
+)
 
 
 def ensure_output_dirs() -> None:
@@ -74,6 +94,53 @@ PB_DICT: dict[str, tuple[str, int]] = {
     "Non ne sono sicur\u0259 ma ha catturato la mia attenzione per qualche motivo":          ("O",  1),
 }
 
+# ---------------------------------------------------------------------------
+# Diary period
+# ---------------------------------------------------------------------------
+
+# DOCUMENTED DECISIONS (confirmed by the study lead on 11 November 2026).
+# Week 1 runs from 1 December to the end of 7 December 2025. Week 2 runs
+# from 8 December to the end of 14 December 2025. Events logged before
+# 1 December were an exception, because some participants started before
+# they were told to. They count as week 1 and, for events per day, as
+# belonging to the first day, 1 December.
+
+#: First day of the diary period (documented decision).
+STUDY_START_DATE: datetime = datetime(2025, 12, 1)
+
+#: Last timestamp counted as week 1 (documented decision). Events whose
+#: effective date is on or before this value are week 1 (W1), later events
+#: are week 2 (W2).
+WEEK1_END: datetime = datetime(2025, 12, 7, 23, 59, 59)
+
+#: Last timestamp of week 2 (documented decision). Three events from one
+#: participant (P20) were logged on 15 December 2025, after the end of
+#: week 2. They are counted in week 2 by decision.
+WEEK2_END: datetime = datetime(2025, 12, 14, 23, 59, 59)
+
+#: Treatment of events logged before STUDY_START_DATE (documented
+#: decision). "first_day" assigns them the effective date STUDY_START_DATE,
+#: so they count as week 1 and as events of the first day.
+EARLY_START_TREATMENT: str = "first_day"
+
+#: Length of the diary period in days, from STUDY_START_DATE to WEEK2_END.
+#: Used as the denominator for events per participant per day.
+DIARY_PERIOD_DAYS: int = (WEEK2_END.date() - STUDY_START_DATE.date()).days + 1
+
+#: Seed for the horizontal jitter of the strip plot in
+#: fig00_likert_distributions.png. Seaborn draws the jitter from NumPy's
+#: global random state, so the figure changes on every run unless it is
+#: seeded. The value is arbitrary. It moves points sideways within their
+#: category for display only and affects no statistic.
+JITTER_SEED: int = 0
+
+#: Effect sizes (rank-biserial r, Kendall's W) are exploratory. The paper
+#: reports no effect sizes and no significance tests. They are kept in the
+#: conditional_probs CSVs under this column prefix only, with a companion
+#: note. No figure shows them. This is the prefix for exported columns that
+#: are not reported in the paper.
+EXPLORATORY_PREFIX: str = "exploratory_"
+
 #: Explicit ordering of context levels for sign-consistent effect sizes.
 #: ACTIVE before PASSIVE; PRE before POST.
 CONTEXT_LEVEL_ORDER: dict[str, list[str]] = {
@@ -89,12 +156,6 @@ CONSTRUCT_COLORS: dict[str, str] = {
     "LD": "#55A868",
     "O":  "#808080",
 }
-
-#: Cluster colour palette (up to 8 clusters), used in analyze_participants.py.
-CLUSTER_PALETTE: list[str] = [
-    "#E63946", "#457B9D", "#2A9D8F", "#E9C46A",
-    "#F4A261", "#264653", "#A8DADC", "#1D3557",
-]
 
 #: Mapping from raw Prolific PID to human-readable participant label.
 #: Covers all 20 registered participants; only those present in the
@@ -121,66 +182,3 @@ PID_MAP: dict[str, str] = {
     "5d9091ff391a60058a7711b5": "P19",
     "60e5d3a91561c1746aa12a5e": "P20",
 }
-
-
-# ---------------------------------------------------------------------------
-# Matplotlib / font setup
-# ---------------------------------------------------------------------------
-
-#: Candidate paths for the Linux Libertine font used in the original
-#: figures (matches the ACM template body font). The first path that
-#: exists on the current machine is used.
-_LIBERTINE_CANDIDATES: list[Path] = [
-    Path("/usr/share/fonts/opentype/linux-libertine/LinLibertine_R.otf"),
-    Path.home() / ".fonts" / "LinLibertine_R.otf",
-]
-_LIBERTINE_VARIANTS = {
-    "R":  "LinLibertine_R.otf",
-    "RB": "LinLibertine_RB.otf",
-    "RI": "LinLibertine_RI.otf",
-    "RBI": "LinLibertine_RBI.otf",
-}
-
-
-def setup_plot_style(font_size: int = 16) -> None:
-    """
-    Configure matplotlib to match the figures used in the paper.
-
-    Tries to register Linux Libertine (regular, bold, italic, bold-italic)
-    so that figures visually match the ACM ``acmsmall`` template body font.
-    If the font is not installed on the current machine, this falls back to
-    matplotlib's default font and prints a one-line warning instead of
-    raising ``FileNotFoundError`` (which is what the original scripts did,
-    since the font path was hardcoded to a specific machine).
-
-    This only affects font *rendering*; it has no effect on any computed
-    statistic, table, or CSV output.
-
-    Parameters
-    ----------
-    font_size:
-        Base font size applied to text, axis labels, tick labels, and
-        legends (matches the original scripts' value of 16).
-    """
-    libertine_root = next((p.parent for p in _LIBERTINE_CANDIDATES if p.exists()), None)
-
-    if libertine_root is not None:
-        for variant_file in _LIBERTINE_VARIANTS.values():
-            fm.fontManager.addfont(str(libertine_root / variant_file))
-        plt.rcParams["font.family"] = "Linux Libertine O"
-    else:
-        warnings.warn(
-            "Linux Libertine font not found on this machine; falling back "
-            "to matplotlib's default font. Figures will render correctly "
-            "but with a different typeface than in the paper. Install "
-            "Linux Libertine (e.g. `apt install fonts-linuxlibertine`) to "
-            "match the original figures exactly.",
-            stacklevel=2,
-        )
-
-    plt.rcParams["figure.figsize"] = (3.3, 2.5)  # inches, matches ACM single-column width
-    plt.rcParams["font.size"] = font_size
-    plt.rcParams["axes.labelsize"] = font_size
-    plt.rcParams["xtick.labelsize"] = font_size
-    plt.rcParams["ytick.labelsize"] = font_size
-    plt.rcParams["legend.fontsize"] = font_size
