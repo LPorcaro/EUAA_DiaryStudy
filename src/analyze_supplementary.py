@@ -84,20 +84,20 @@ PAPER_EVENTS_PER_DAY = {  # Section 5.2
 PAPER_TABLE_A4 = """
 P2  15 18 .09 .11 .17 .20 .32 .31 .67 .83 3.1 3.3 2.7 2.6 3.6 3.3
 P4  17 21 .27 .37 .12 .19 .15 .08 .35 .24 4.1 4.5 2.6 2.2 3.9 3.7
-P5  11  6 .12 .06 .15 .17 .09 .12 .73 .83 3.5 3.8 3.1 3.3 3.2 3.0
-P6  18 20 .20 .12 .51 .22 .62 .30 .33 .30 4.2 4.8 3.0 3.0 3.8 4.1
-P8  12 11 .06 .00 .75 .76 .46 .30 .08 .00 1.8 1.2 2.5 2.9 4.2 4.5
+P5  11  6 .12 .06 .15 .17 .09 .13 .73 .83 3.5 3.8 3.1 3.3 3.2 3.0
+P6  18 20 .20 .12 .51 .22 .63 .30 .33 .30 4.2 4.8 3.0 3.0 3.8 4.1
+P8  12 11 .06 .00 .75 .76 .46 .30 .08 .00 1.8 1.2 2.5 2.9 4.3 4.5
 P9  10  6 .17 .11 .32 .40 .30 .29 .20 .00 3.5 2.8 2.9 3.3 4.6 4.3
-P14 16 22 .04 .00 .56 .55 .08 .10 .25 .14 2.2 2.1 3.0 3.0 3.8 4.0
-P16 17 13 .49 .21 .65 .38 .60 .33 .41 .31 3.1 4.5 2.5 2.9 4.5 4.3
+P14 16 22 .04 .00 .56 .55 .08 .10 .25 .14 2.3 2.1 3.0 3.0 3.8 4.0
+P16 17 13 .49 .21 .65 .38 .60 .33 .41 .31 3.1 4.5 2.5 2.8 4.5 4.3
 P20 15 16 .36 .50 .40 .30 .22 .20 .00 .06 4.2 4.1 2.2 2.4 3.9 3.7
 """
 TABLE_A4_COLUMNS = (
     ["n_events"] + [f"{c}_rate" for c in CONSTRUCTS] + LIKERTS
 )
 PAPER_LOO = {  # Appendix B.3
-    ("ALGO_CAUSE", "SB1"): ("0.83", ".76", ".90"),
-    ("ARTIST_HARM", "LD4"): ("0.83", ".76", ".92"),
+    ("ALGO_CAUSE", "SB1"): ("0.83", ".75", ".90"),
+    ("ARTIST_HARM", "LD4"): ("0.83", ".75", ".92"),
 }
 
 
@@ -207,14 +207,14 @@ def build_comparison(
     rows = []
     grouped = plat.groupby("paper_group")["percent"].sum()
     for name, paper in PAPER_PLATFORM_PCT.items():
-        rows.append(compare(f"platform share {name} (%)", "S5.2 p.16",
+        rows.append(compare(f"platform share {name} (%)", "Section 5.2",
                             paper, grouped[name]))
 
     n_total = epd["n_events"].sum()
-    rows.append(compare("events per participant per day", "S5.2 p.16",
+    rows.append(compare("events per participant per day", "Section 5.2",
                         PAPER_EVENTS_PER_DAY["mean per participant"],
                         n_total / (len(epd) * DIARY_PERIOD_DAYS)))
-    rows.append(compare("events per day, most active participant", "S5.2 p.16",
+    rows.append(compare("events per day, most active participant", "Section 5.2",
                         PAPER_EVENTS_PER_DAY["most active participant"],
                         epd["events_per_day"].max()))
 
@@ -223,16 +223,16 @@ def build_comparison(
         p, *vals = line.split()
         for k, col in enumerate(TABLE_A4_COLUMNS):
             for w, paper in zip(("W1", "W2"), vals[2 * k: 2 * k + 2]):
-                rows.append(compare(f"Table A4 {p} {col} {w}", "Table A4 p.39",
+                rows.append(compare(f"Table A4 {p} {col} {w}", "Table A4",
                                     paper, a4i.loc[(p, w), col]))
 
     li = loo.set_index(["likert", "PB"])
     for (q, pb), (full, lo, hi) in PAPER_LOO.items():
-        rows.append(compare(f"B.3 rho {q} x {pb}", "B.3 p.42", full,
+        rows.append(compare(f"B.3 rho {q} x {pb}", "Appendix B.3", full,
                             li.loc[(q, pb), "rho_full"]))
-        rows.append(compare(f"B.3 LOO min {q} x {pb}", "B.3 p.42", lo,
+        rows.append(compare(f"B.3 LOO min {q} x {pb}", "Appendix B.3", lo,
                             li.loc[(q, pb), "loo_min"]))
-        rows.append(compare(f"B.3 LOO max {q} x {pb}", "B.3 p.42", hi,
+        rows.append(compare(f"B.3 LOO max {q} x {pb}", "Appendix B.3", hi,
                             li.loc[(q, pb), "loo_max"]))
     return pd.DataFrame(rows)
 
