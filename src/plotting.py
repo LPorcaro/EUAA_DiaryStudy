@@ -19,6 +19,8 @@ from pathlib import Path
 
 import matplotlib.pyplot as plt
 
+import figstyle  # noqa: F401  (every plotting module imports the shared style)
+
 
 def save_and_show(
     fig: plt.Figure,
@@ -49,7 +51,7 @@ def save_and_show(
 
     Returns
     -------
-    Path to the saved PNG file.
+    Path to the saved PNG file. A PDF with the same stem is saved too.
     """
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -57,6 +59,15 @@ def save_and_show(
 
     fig.savefig(out_path, dpi=dpi, bbox_inches="tight")
     print(f"[figure] {filename} -> {out_path}")
+
+    # Vector copy with the same name and a .pdf suffix. Fonts are embedded
+    # according to figstyle.EMBEDDING_RCPARAMS (TrueType, Type 42).
+    pdf_path = out_path.with_suffix(".pdf")
+    if pdf_path != out_path:
+        # No creation date, so that repeated runs give byte-identical PDFs.
+        fig.savefig(pdf_path, dpi=dpi, bbox_inches="tight",
+                    metadata={"CreationDate": None})
+        print(f"[figure] {pdf_path.name} -> {pdf_path}")
 
     if show:
         plt.show()
