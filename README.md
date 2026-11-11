@@ -41,20 +41,13 @@ The diary data is included in `data/events_20260324.csv`. The scripts
 read it from that location, relative to the repository root. If the file
 is missing, they stop with a message that names the expected path.
 
-The diary data file and the participant ID mapping (`PID_MAP` in
-`src/config.py`) are included in this repository by documented decision.
-
 The facsimiles of the diary forms and the framework analysis matrix that
 the manuscript links to are in `artefacts/`. No script reads or writes
 them.
 
 ## Licence
 
-The MIT licence in `LICENSE` covers the code. The Creative Commons
-Attribution 4.0 International licence (CC BY 4.0) covers the data in
-`data/`, as stated in [`data/LICENSE-DATA.txt`](data/LICENSE-DATA.txt).
-The data licence applies to the data from the commit that adds
-`data/LICENSE-DATA.txt`.
+The MIT licence in `LICENSE` covers the code.
 
 ## Setup
 
@@ -116,43 +109,6 @@ python3 analyze_supplementary.py # step 3, platform shares, events per day, Tabl
 Each `main()` function accepts path overrides, for example
 `main(input_path="path/to/events.csv")`.
 
-### Weeks and events per day
-
-The week split follows documented decisions in `src/config.py`. Week 1
-runs from 1 December to the end of 7 December 2025 and week 2 from
-8 December to the end of 14 December. Events logged before 1 December
-count as week 1 and, for events per day, as events of the first day.
-Three events from one participant logged on 15 December are counted in
-week 2. Events per day use a fixed period of 14 days.
-
-## Running the tests
-
-Run each test file with Python from the repository root.
-
-```bash
-python3 tests/test_rounding.py
-python3 tests/test_pb_parsing.py
-python3 tests/test_round_once.py
-```
-
-`test_round_once.py` runs the event-level pipeline into a temporary folder
-and checks every reported number against an independent full-precision
-calculation.
-
-## Steps that cannot be reproduced from this repository
-
-Two steps happened before this pipeline.
-
-1. **Event exclusion.** Participants registered 275 events. Eleven were
-   removed by hand before `data/events_20260324.csv` was created. These
-   were incomplete registrations, events unrelated to music listening,
-   and events that participants flagged as not problematic. The file
-   with all 275 events is not in the repository, so the exclusion and
-   the week 1 and week 2 totals of 141 and 134 cannot be rerun.
-2. **Participant characteristics.** Table A1 and the figures in Section
-   5.1 of the paper (gender, age, education, platforms, Gold-MSI, AMCA
-   and self-assessed knowledge) come from questionnaire data that is not
-   in the repository. No script produces them.
 
 ## Project structure
 
@@ -160,8 +116,7 @@ Two steps happened before this pipeline.
 EUAA_DiaryStudy/
 ├── artefacts/                       # diary form facsimiles and framework matrix
 ├── data/
-│   ├── events_20260324.csv          # diary events (input)
-│   └── LICENSE-DATA.txt             # CC BY 4.0 for the data
+│   └── events_20260324.csv          # diary events (input)
 ├── outputs/                         # generated, not tracked
 │   ├── figures/events/              # figures from analyze_events.py
 │   └── tables/                      # CSV outputs and notes
@@ -209,27 +164,17 @@ no `fig04`.
   descriptive summary. The rank-biserial r and Kendall's W are
   exploratory and are not reported in the paper. No significance test and
   no correction for multiple comparisons is applied.
-- **Rounding.** Every reported number is rounded once, from its
-  full-precision value, with the half-up rule (`decimal.ROUND_HALF_UP`
-  applied to the shortest decimal representation of the float). Halves
-  are rounded away from zero, so 3.25 becomes 3.3 and 0.125 becomes 0.13.
-  Python's default rounding of halves to even is not used. CSV files that
-  are not shown in the paper as such (for example `participant_summary.csv`
-  and `table_A4_weekly.csv`) keep full precision.
-  `tests/test_round_once.py` fails if any reported value is rounded twice.
 - **Reproducibility.** No statistic uses resampling or a random seed. The
   only random element is the display jitter in `fig00`, seeded by
   `JITTER_SEED` in `src/config.py`.
 - **Measurement model.** SB4 was reclassified as CI5.
   `analyze_events.py` reports reliability for both the original and the
   revised item sets.
-- **O2 answers.** Free-text answers to the "Other" option are excluded
-  from every analysis.
 
 ## Acknowledgment
 
 The study design, methodology, statistical approach, and all analytical
 decisions in this pipeline were developed by the research team. Claude 
-Sonnet 5 (Anthropic) was used to refactor the codebase: cleaning up
+Code was used to refactor the codebase: cleaning up
 structure, fixing portability issues, adding consistent documentation, 
 and ensuring all figures are saved to disk.
